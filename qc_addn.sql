@@ -25,3 +25,16 @@ JOIN asnfdm.qc_rule_case_bypass b
  AND b.qc_rule_no  = f.qc_rule_no
  AND b.case_id     = f.case_id
 WHERE f.batch_id = {BATCH_ID};
+
+
+/* ================================
+   RULE-BASED QC BYPASS – DELETE
+   ================================ */
+
+DELETE FROM {QC_FAILED_TABLE} f
+USING asnfdm.qc_rule_case_bypass b
+WHERE f.batch_id   = {BATCH_ID}
+  AND b.source_name = '{SOURCE_NAME}'
+  AND b.is_active   = TRUE
+  AND b.qc_rule_no  = f.qc_rule_no
+  AND b.case_id     = f.case_id;
