@@ -52,23 +52,34 @@ CREATE INDEX IF NOT EXISTS idx_shipments_product
 -- 4. VIEW: Tableau-Ready Combined View
 --    Joins fact + dim so Tableau only connects to one object
 -- ------------------------------------------------------------
-CREATE OR REPLACE VIEW vw_shipments_tableau AS
+CREATE OR REPLACE VIEW asnfdm.vw_shipments_tableau AS
+WITH base AS (
+    SELECT
+        f.year,
+        f.month,
+        f.month_name,
+        TO_DATE(
+            f.year::TEXT || '-' || LPAD(f.month::TEXT, 2, '0') || '-01',
+            'YYYY-MM-DD'
+        ) AS shipment_date,
+        f.ndc,
+        COALESCE(d.ndc_name_dashboard,  f.product_name)   AS ndc_display_name,
+        COALESCE(d.drug_name_dashboard, f.product_name)   AS drug_name,
+        COALESCE(d.product_full_name,   f.product_detail) AS product_full_name,
+        f.product_detail,
+        f.units_singles,
+        f.units_packs,
+        f.loaded_at
+    FROM asnfdm.fact_product_shipments f
+    LEFT JOIN asnfdm.dim_product d ON f.ndc = d.ndc
+)
 SELECT
-    f.year,
-    f.month,
-    f.month_name,
-    -- Use a proper date for time-series charts in Tableau
-    TO_DATE(f.year::TEXT || '-' || LPAD(f.month::TEXT, 2, '0') || '-01', 'YYYY-MM-DD') AS shipment_date,
-    f.ndc,
-    COALESCE(d.ndc_name_dashboard,  f.product_name)   AS ndc_display_name,
-    COALESCE(d.drug_name_dashboard, f.product_name)   AS drug_name,
-    d.product_full_name,
-    f.product_detail,
-    f.units_singles,
-    f.units_packs,
-    f.loaded_at
-FROM fact_product_shipments f
-LEFT JOIN dim_product d ON f.ndc = d.ndc;
+    b.*,
+    v.vendor,
+    v.benefit_type
+FROM base b
+LEFT JOIN asnfdm.product_benefit_vendor_map v ON b.drug_name = v.product;
+
 
 
 -- ------------------------------------------------------------
