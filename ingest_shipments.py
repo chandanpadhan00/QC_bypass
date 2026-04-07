@@ -17,12 +17,16 @@ from datetime import datetime
 from sqlalchemy import create_engine, text
 
 # ── LOGGING ──────────────────────────────────────────────────────────────────
+import io
+# Fix Windows cp1252 terminal encoding — allows special characters in logs
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("ingest_shipments.log"),
+        logging.FileHandler("ingest_shipments.log", encoding="utf-8"),  # UTF-8 log file
     ],
 )
 log = logging.getLogger(__name__)
@@ -37,8 +41,9 @@ MAPPING_FILE   = "Shipments_data_mapping_asnf.xlsx"
 DB_URL = "postgresql+psycopg2://username:password@host:5432/your_database"
 # Example: "postgresql+psycopg2://admin:secret@localhost:5432/asnf_db"
 
-FACT_TABLE = "fact_product_shipments"
-DIM_TABLE  = "dim_product"
+DB_SCHEMA  = "asnfdm"                    # PostgreSQL schema name
+FACT_TABLE = "fact_product_shipments"   # Table name only (no schema prefix)
+DIM_TABLE  = "dim_product"              # Table name only (no schema prefix)
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -192,7 +197,7 @@ def parse_detail_sheet(df_raw: pd.DataFrame, year: int) -> pd.DataFrame:
 
 def load_dim_product(engine):
     """Truncate & reload dim_product from the mapping Excel file."""
-    log.info(f"Loading {DIM_TABLE} from: {MAPPING_FILE}")
+    log.info(f"Loading {DB_SCHEMA}.{DIM_TABLE} from: {MAPPING_FILE}")
 
     df = pd.read_excel(MAPPING_FILE, sheet_name="Sheet1", dtype=str)
     df.columns = df.columns.str.strip()
@@ -208,10 +213,11 @@ def load_dim_product(engine):
     df = df[df["ndc"].notna() & (df["ndc"] != "nan") & (df["ndc"] != "")]
 
     with engine.begin() as conn:
-        conn.execute(text(f"TRUNCATE TABLE {DIM_TABLE}"))
+        conn.execute(text(f"TRUNCATE TABLE {DB_SCHEMA}.{DIM_TABLE}"))
 
-    df.to_sql(DIM_TABLE, engine, if_exists="append", index=False, chunksize=500)
-    log.info(f"  ✔  {len(df):,} rows loaded into {DIM_TABLE}")
+    # schema= parameter tells to_sql exactly which schema to use
+    df.to_sql(DIM_TABLE, engine, schema=DB_SCHEMA, if_exists="append", index=False, chunksize=500)
+    log.info(f"  [OK] {len(df):,} rows loaded into {DB_SCHEMA}.{DIM_TABLE}")
 
 
 def load_fact_shipments(engine):
@@ -238,10 +244,11 @@ def load_fact_shipments(engine):
     log.info(f"Total rows to load: {len(df_final):,}")
 
     with engine.begin() as conn:
-        conn.execute(text(f"TRUNCATE TABLE {FACT_TABLE}"))
+        conn.execute(text(f"TRUNCATE TABLE {DB_SCHEMA}.{FACT_TABLE}"))
 
-    df_final.to_sql(FACT_TABLE, engine, if_exists="append", index=False, chunksize=500)
-    log.info(f"  ✔  {len(df_final):,} rows loaded into {FACT_TABLE}")
+    # schema= parameter tells to_sql exactly which schema to use
+    df_final.to_sql(FACT_TABLE, engine, schema=DB_SCHEMA, if_exists="append", index=False, chunksize=500)
+    log.info(f"  [OK] {len(df_final):,} rows loaded into {DB_SCHEMA}.{FACT_TABLE}")
 
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
@@ -258,11 +265,11 @@ def main():
     load_dim_product(engine)
 
     # Step 2: Load shipments fact table
-    log.info(f"Loading {FACT_TABLE} from: {SHIPMENTS_FILE}")
+    log.info(f"Loading {DB_SCHEMA}.{FACT_TABLE} from: {SHIPMENTS_FILE}")
     load_fact_shipments(engine)
 
     log.info("=" * 60)
-    log.info("ETL Complete ✔")
+    log.info("ETL Complete [OK]")
     log.info("=" * 60)
 
 
