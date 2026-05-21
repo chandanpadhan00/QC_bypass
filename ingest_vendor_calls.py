@@ -158,7 +158,11 @@ def upsert_rows(conn, df: pd.DataFrame, load_time: datetime) -> tuple[int, int]:
 
 def main():
     parser = argparse.ArgumentParser(description="Ingest vendor call data Excel → PostgreSQL")
-    parser.add_argument("--file", required=True, help="Path to the Excel file")
+    parser.add_argument(
+        "--file",
+        default=r"C:\Users\hp\Downloads\Master Vendor Call Data for Dashboard.xlsx",
+        help="Path to the Excel file",
+    )
     parser.add_argument(
         "--dry-run", action="store_true",
         help="Parse the file and show row counts without writing to the DB",
