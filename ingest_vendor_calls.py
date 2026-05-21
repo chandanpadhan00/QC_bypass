@@ -122,7 +122,13 @@ def upsert_rows(conn, df: pd.DataFrame, load_time: datetime) -> tuple[int, int]:
         "asa_time", "abandonment_rate_pct", "avg_handle_talk_time",
         "max_hold_time", "load_time",
     ]
-    rows = [tuple(row[c] for c in cols) for _, row in df.iterrows()]
+    def _clean(v):
+        try:
+            return None if pd.isna(v) else v
+        except (TypeError, ValueError):
+            return v
+
+    rows = [tuple(_clean(row[c]) for c in cols) for _, row in df.iterrows()]
 
     # ON CONFLICT: update all metric columns but keep the original load_time
     # so we know when the row first appeared; bump load_time only if data changes.
